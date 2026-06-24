@@ -31,6 +31,7 @@ class AgentState:
         self.papers: list[dict] = []        # PaperMetadata list
         self.summaries: list[dict] = []     # PaperSummary list
         self.comparison: dict = {}          # Comparison table
+        self.chunks: list[dict] = []    # Chunk list from pdf_reader
         self.report_path: str | None = None
 
         # Counters

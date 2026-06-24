@@ -4,7 +4,8 @@ from rich.table import Table
 
 from agent.state import AgentState
 from agent.planner import generate_plan
-from tools.search import search_papers  # ← new import
+from tools.search import search_papers
+from tools.pdf_reader import process_papers
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -57,9 +58,19 @@ class Orchestrator:
             self._display_papers(papers)
 
         elif step == "download_pdfs":
-            raise NotImplementedError
+            results, chunks = process_papers(
+                self.state.papers,
+                self.state.session_id,
+            )
+            # Save chunks to state as dicts
+            self.state.chunks = [c.to_dict() for c in chunks]
+            self._display_download_results(results)
+
         elif step == "chunk_texts":
-            raise NotImplementedError
+            # Chunking is done inside process_papers, so nothing extra needed
+            total = len(getattr(self.state, "chunks", []))
+            console.print(f"  [dim]Total chunks ready: {total}[/dim]")
+
         elif step == "summarize_papers":
             raise NotImplementedError
         elif step == "compare_papers":
@@ -80,4 +91,14 @@ class Orchestrator:
         for i, p in enumerate(papers, 1):
             table.add_row(str(i), p.title, str(p.year), p.source)
 
+        console.print(table)
+
+    def _display_download_results(self, results):
+        table = Table(title="PDF Download Results")
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Title", max_width=55)
+        table.add_column("Status", width=10)
+        for i, r in enumerate(results, 1):
+            status = "[green]✓ OK[/green]" if r.success else "[red]✗ Failed[/red]"
+            table.add_row(str(i), r.title[:55], status)
         console.print(table)

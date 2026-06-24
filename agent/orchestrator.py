@@ -1,7 +1,10 @@
 import logging
 from rich.console import Console
+from rich.table import Table
+
 from agent.state import AgentState
 from agent.planner import generate_plan
+from tools.search import search_papers  # ← new import
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -48,9 +51,11 @@ class Orchestrator:
                 break
 
     def _run_step(self, step: str):
-        """Dispatches to the correct tool. Each phase wires in a real implementation."""
         if step == "search_papers":
-            raise NotImplementedError
+            papers = search_papers(self.state.topic)
+            self.state.papers = [p.to_dict() for p in papers]
+            self._display_papers(papers)
+
         elif step == "download_pdfs":
             raise NotImplementedError
         elif step == "chunk_texts":
@@ -63,3 +68,16 @@ class Orchestrator:
             raise NotImplementedError
         elif step == "save_to_kb":
             raise NotImplementedError
+
+    def _display_papers(self, papers):
+        """Print a summary table of found papers."""
+        table = Table(title=f"Papers Found ({len(papers)})")
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Title", max_width=55)
+        table.add_column("Year", width=6)
+        table.add_column("Source", width=16)
+
+        for i, p in enumerate(papers, 1):
+            table.add_row(str(i), p.title, str(p.year), p.source)
+
+        console.print(table)

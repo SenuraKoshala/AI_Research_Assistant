@@ -10,6 +10,8 @@ GEMINI_MODEL = "gemini-2.5-flash"
 # Search
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 
+S2_API_KEY = os.getenv("S2_API_KEY", "")
+
 # Agent limits
 MAX_PAPERS = 10
 MAX_LLM_CALLS_PER_SESSION = 50

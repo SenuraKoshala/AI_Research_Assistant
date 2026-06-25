@@ -49,7 +49,8 @@ def _search_arxiv(topic: str, max_results: int) -> list[PaperMetadata]:
     papers = []
 
     try:
-        client = arxiv.Client()
+        time.sleep(3.0)  # arXiv requires polite delay
+        client = arxiv.Client(num_retries=2, delay_seconds=5.0)
         search = arxiv.Search(
             query=topic,
             max_results=max_results,
@@ -60,7 +61,6 @@ def _search_arxiv(topic: str, max_results: int) -> list[PaperMetadata]:
             pdf_url = result.pdf_url
             if not pdf_url:
                 continue
-
             paper = PaperMetadata(
                 paper_id=_make_id(pdf_url),
                 title=result.title,
@@ -72,7 +72,7 @@ def _search_arxiv(topic: str, max_results: int) -> list[PaperMetadata]:
             )
             papers.append(paper)
             logger.info(f"  [arXiv] Found: {result.title[:70]}")
-            time.sleep(0.5)  # be polite to the API
+            time.sleep(0.5)
 
     except Exception as e:
         logger.error(f"[arXiv] Search failed: {e}")
@@ -151,9 +151,9 @@ def _search_tavily(topic: str, max_results: int) -> list[PaperMetadata]:
             "https://api.tavily.com/search",
             json={
                 "api_key": TAVILY_API_KEY,
-                "query": f"{topic} research paper PDF",
+                "query": f"{topic} research paper filetype:pdf",
                 "max_results": max_results,
-                "include_domains": ["arxiv.org", "semanticscholar.org", "researchgate.net"],
+                "search_depth": "advanced",
             },
             timeout=10,
         )
@@ -162,11 +162,10 @@ def _search_tavily(topic: str, max_results: int) -> list[PaperMetadata]:
 
         for item in results:
             url = item.get("url", "")
-            if not url.endswith(".pdf"):
-                continue
+            title = item.get("title", "Unknown")
             paper = PaperMetadata(
                 paper_id=_make_id(url),
-                title=item.get("title", "Unknown"),
+                title=title,
                 authors=[],
                 year=0,
                 abstract=item.get("content", ""),
@@ -174,7 +173,7 @@ def _search_tavily(topic: str, max_results: int) -> list[PaperMetadata]:
                 source="Tavily",
             )
             papers.append(paper)
-            logger.info(f"  [Tavily] Found: {item.get('title', '')[:70]}")
+            logger.info(f"  [Tavily] Found: {title[:70]}")
 
     except Exception as e:
         logger.error(f"[Tavily] Search failed: {e}")

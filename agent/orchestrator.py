@@ -6,6 +6,7 @@ from agent.state import AgentState
 from agent.planner import generate_plan
 from tools.search import search_papers
 from tools.pdf_reader import process_papers
+from tools.summarizer import summarize_papers
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -72,7 +73,14 @@ class Orchestrator:
             console.print(f"  [dim]Total chunks ready: {total}[/dim]")
 
         elif step == "summarize_papers":
-            raise NotImplementedError
+            summaries, call_count = summarize_papers(
+                papers=self.state.papers,
+                chunks=self.state.chunks,
+                llm_calls_used=self.state.llm_calls,
+            )
+            self.state.summaries = [s.to_dict() for s in summaries]
+            self.state.llm_calls = call_count
+            self._display_summaries(summaries)
         elif step == "compare_papers":
             raise NotImplementedError
         elif step == "generate_report":
@@ -102,3 +110,15 @@ class Orchestrator:
             status = "[green]✓ OK[/green]" if r.success else "[red]✗ Failed[/red]"
             table.add_row(str(i), r.title[:55], status)
         console.print(table)
+
+    def _display_summaries(self, summaries):
+        from rich.panel import Panel
+        for s in summaries:
+            content = (
+                f"[bold]Problem:[/bold] {s.problem}\n\n"
+                f"[bold]Method:[/bold] {s.method}\n\n"
+                f"[bold]Datasets:[/bold] {', '.join(s.datasets) or 'N/A'}\n\n"
+                f"[bold]Results:[/bold] {s.results}\n\n"
+                f"[bold]Limitations:[/bold] {s.limitations}"
+            )
+            console.print(Panel(content, title=f"[cyan]{s.title[:70]}[/cyan]", expand=False))

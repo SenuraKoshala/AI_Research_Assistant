@@ -7,3 +7,5 @@ arxiv
 PyMuPDF
 chromadb
 sentence-transformers
+fastapi
+uvicorn

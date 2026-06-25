@@ -7,6 +7,8 @@ from agent.planner import generate_plan
 from tools.search import search_papers
 from tools.pdf_reader import process_papers
 from tools.summarizer import summarize_papers
+from tools.comparator import compare_papers
+from tools.reporter import generate_report
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -82,9 +84,23 @@ class Orchestrator:
             self.state.llm_calls = call_count
             self._display_summaries(summaries)
         elif step == "compare_papers":
-            raise NotImplementedError
+            comparison, call_count = compare_papers(
+                summaries=self.state.summaries,
+                llm_calls_used=self.state.llm_calls,
+            )
+            self.state.comparison = comparison
+            self.state.llm_calls = call_count
+            self._display_comparison(comparison)
+
         elif step == "generate_report":
-            raise NotImplementedError
+            report_path = generate_report(
+                topic=self.state.topic,
+                summaries=self.state.summaries,
+                comparison=self.state.comparison,
+                session_id=self.state.session_id,
+            )
+            self.state.report_path = report_path
+            console.print(f"  [green]Report saved:[/green] {report_path}")
         elif step == "save_to_kb":
             raise NotImplementedError
 
@@ -122,3 +138,25 @@ class Orchestrator:
                 f"[bold]Limitations:[/bold] {s.limitations}"
             )
             console.print(Panel(content, title=f"[cyan]{s.title[:70]}[/cyan]", expand=False))
+
+    def _display_comparison(self, comparison: dict):
+        if not comparison or "dimensions" in comparison == False:
+            console.print("  [yellow]No comparison data to display[/yellow]")
+            return
+
+        dims = comparison.get("dimensions", {})
+        for dim_name, dim_data in dims.items():
+            desc = dim_data.get("description", "")
+            console.print(f"  [bold cyan]{dim_name.capitalize()}:[/bold cyan] {desc}")
+
+        gaps = comparison.get("research_gaps", [])
+        if gaps:
+            console.print("\n  [bold]Research Gaps:[/bold]")
+            for gap in gaps:
+                console.print(f"    • {gap}")
+
+        directions = comparison.get("future_directions", [])
+        if directions:
+            console.print("\n  [bold]Future Directions:[/bold]")
+            for d in directions:
+                console.print(f"    • {d}")

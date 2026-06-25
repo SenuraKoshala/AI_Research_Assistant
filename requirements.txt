@@ -5,3 +5,5 @@ rich
 requests
 arxiv
 PyMuPDF
+chromadb
+sentence-transformers

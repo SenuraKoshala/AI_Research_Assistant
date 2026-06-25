@@ -9,6 +9,7 @@ from tools.pdf_reader import process_papers
 from tools.summarizer import summarize_papers
 from tools.comparator import compare_papers
 from tools.reporter import generate_report
+from tools.knowledge_base import save_to_kb
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -102,7 +103,15 @@ class Orchestrator:
             self.state.report_path = report_path
             console.print(f"  [green]Report saved:[/green] {report_path}")
         elif step == "save_to_kb":
-            raise NotImplementedError
+            save_to_kb(
+                session_id=self.state.session_id,
+                topic=self.state.topic,
+                papers=self.state.papers,
+                summaries=self.state.summaries,
+                chunks=self.state.chunks,
+            )
+            total = len(self.state.chunks)
+            console.print(f"  [green]{total} chunks embedded and stored in ChromaDB[/green]")
 
     def _display_papers(self, papers):
         """Print a summary table of found papers."""

@@ -2,17 +2,29 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import ChatWindow from "./components/ChatWindow";
 import SessionSelector from "./components/SessionSelector";
-
-const API = "http://127.0.0.1:8000";
+import NewResearchModal from "./components/NewResearchModal";
+import { API, streamSSE } from "./api";
 
 export default function App() {
   const [sessions, setSessions] = useState([]);
   const [selectedSession, setSelectedSession] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
+
+  // New-research modal state
+  const [showNewResearch, setShowNewResearch] = useState(false);
+  const [researching, setResearching] = useState(false);
+  const [researchProgress, setResearchProgress] = useState([]);
+
+  const refreshSessions = () =>
+    axios.get(`${API}/sessions`).then((res) => {
+      setSessions(res.data);
+      return res.data;
+    });
 
   useEffect(() => {
-    axios.get(`${API}/sessions`).then((res) => setSessions(res.data));
+    refreshSessions();
   }, []);
 
   const handleSelectSession = (session) => {
@@ -23,41 +35,121 @@ export default function App() {
   const handleSend = async (message) => {
     if (!selectedSession) return;
 
-    const userMsg = { role: "user", content: message };
-    const updatedHistory = [...history, userMsg];
-    setHistory(updatedHistory);
+    const priorHistory = history;
+    setHistory((h) => [
+      ...h,
+      { role: "user", content: message },
+      { role: "assistant", content: "", sources: [], streaming: true },
+    ]);
     setLoading(true);
+    setStatus("");
 
-    try {
-      const res = await axios.post(`${API}/chat`, {
-        session_id: selectedSession.session_id,
-        message,
-        history: history,
+    let answer = "";
+    let sources = [];
+
+    // Replace the last (assistant) message as tokens arrive.
+    const updateLast = (patch) =>
+      setHistory((h) => {
+        const copy = [...h];
+        copy[copy.length - 1] = { ...copy[copy.length - 1], ...patch };
+        return copy;
       });
 
-      const assistantMsg = {
-        role: "assistant",
-        content: res.data.reply,
-        sources: res.data.sources,
-      };
-      setHistory([...updatedHistory, assistantMsg]);
-    } catch (err) {
-      setHistory([
-        ...updatedHistory,
+    try {
+      await streamSSE(
+        "/chat/stream",
         {
-          role: "assistant",
-          content: "Error getting response. Please try again.",
+          session_id: selectedSession.session_id,
+          message,
+          history: priorHistory,
         },
-      ]);
+        (evt) => {
+          if (evt.type === "status") {
+            setStatus(evt.message);
+          } else if (evt.type === "sources") {
+            sources = evt.sources;
+          } else if (evt.type === "token") {
+            answer += evt.content;
+            updateLast({ content: answer, sources });
+          } else if (evt.type === "done") {
+            updateLast({ content: answer, sources, streaming: false });
+          } else if (evt.type === "error") {
+            updateLast({
+              content: `⚠️ Error: ${evt.message}`,
+              streaming: false,
+            });
+          }
+        }
+      );
+    } catch (err) {
+      updateLast({
+        content: "Error getting response. Please try again.",
+        streaming: false,
+      });
     } finally {
       setLoading(false);
+      setStatus("");
     }
+  };
+
+  const handleStartResearch = async (topic, maxPapers) => {
+    setResearching(true);
+    setResearchProgress([]);
+    let newSessionId = null;
+
+    try {
+      await streamSSE(
+        "/research/stream",
+        { topic, max_papers: maxPapers },
+        (evt) => {
+          if (evt.type === "status") {
+            setResearchProgress((p) => [...p, evt.message]);
+          } else if (evt.type === "session") {
+            newSessionId = evt.session_id;
+          } else if (evt.type === "done") {
+            newSessionId = evt.session_id;
+            setResearchProgress((p) => [...p, "🎉 Research complete!"]);
+          } else if (evt.type === "error") {
+            setResearchProgress((p) => [...p, `❌ Error: ${evt.message}`]);
+          }
+        }
+      );
+
+      // Refresh the sidebar and jump into the new session.
+      const updated = await refreshSessions();
+      const created = updated.find((s) => s.session_id === newSessionId);
+      if (created) handleSelectSession(created);
+    } catch (err) {
+      setResearchProgress((p) => [...p, `❌ Error: ${err.message}`]);
+    } finally {
+      setResearching(false);
+    }
+  };
+
+  const closeModal = () => {
+    if (researching) return;
+    setShowNewResearch(false);
+    setResearchProgress([]);
   };
 
   return (
     <div style={styles.app}>
+      {showNewResearch && (
+        <NewResearchModal
+          onClose={closeModal}
+          onStart={handleStartResearch}
+          researching={researching}
+          progress={researchProgress}
+        />
+      )}
       <div style={styles.sidebar}>
         <h2 style={styles.sidebarTitle}>Research Sessions</h2>
+        <button
+          style={styles.newBtn}
+          onClick={() => setShowNewResearch(true)}
+        >
+          + New Research
+        </button>
         <SessionSelector
           sessions={sessions}
           selected={selectedSession}
@@ -77,6 +169,7 @@ export default function App() {
             <ChatWindow
               history={history}
               loading={loading}
+              status={status}
               onSend={handleSend}
             />
           </>
@@ -113,6 +206,18 @@ const styles = {
     textTransform: "uppercase",
     letterSpacing: "1px",
     marginBottom: "16px",
+  },
+  newBtn: {
+    width: "100%",
+    marginBottom: "16px",
+    background: "#7c83ff",
+    color: "#fff",
+    border: "none",
+    borderRadius: "8px",
+    padding: "10px",
+    fontSize: "13px",
+    fontWeight: 600,
+    cursor: "pointer",
   },
   main: {
     flex: 1,

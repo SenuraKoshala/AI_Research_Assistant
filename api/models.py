@@ -22,3 +22,8 @@ class SessionInfo(BaseModel):
     topic: str
     created_at: str
     paper_count: int
+
+
+class ResearchRequest(BaseModel):
+    topic: str
+    max_papers: int = 10

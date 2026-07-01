@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import MessageBubble from "./MessageBubble";
 
-export default function ChatWindow({ history, loading, onSend }) {
+export default function ChatWindow({ history, loading, status, onSend }) {
   const [input, setInput] = useState("");
   const bottomRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [history, loading]);
+  }, [history, loading, status]);
 
   const handleSubmit = () => {
     if (!input.trim() || loading) return;
@@ -22,6 +22,13 @@ export default function ChatWindow({ history, loading, onSend }) {
     }
   };
 
+  // Show the "thinking" indicator only while we're loading and the answer
+  // hasn't started streaming into the last bubble yet.
+  const lastMsg = history[history.length - 1];
+  const answerStarted =
+    lastMsg && lastMsg.role === "assistant" && lastMsg.content.length > 0;
+  const showThinking = loading && !answerStarted;
+
   return (
     <div style={styles.container}>
       <div style={styles.messages}>
@@ -33,10 +40,13 @@ export default function ChatWindow({ history, loading, onSend }) {
         {history.map((msg, i) => (
           <MessageBubble key={i} message={msg} />
         ))}
-        {loading && (
-          <div style={styles.typing}>
-            <span style={styles.dot} /> <span style={styles.dot} />{" "}
-            <span style={styles.dot} />
+        {showThinking && (
+          <div style={styles.thinking}>
+            <div style={styles.dots}>
+              <span style={styles.dot} /> <span style={styles.dot} />{" "}
+              <span style={styles.dot} />
+            </div>
+            {status && <span style={styles.statusText}>{status}</span>}
           </div>
         )}
         <div ref={bottomRef} />
@@ -87,11 +97,21 @@ const styles = {
     marginTop: "40px",
     fontSize: "14px",
   },
-  typing: {
+  thinking: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    padding: "8px 4px",
+    alignSelf: "flex-start",
+  },
+  dots: {
     display: "flex",
     gap: "6px",
-    padding: "12px 16px",
-    alignSelf: "flex-start",
+  },
+  statusText: {
+    fontSize: "13px",
+    color: "#7c83ff",
+    fontStyle: "italic",
   },
   dot: {
     width: "8px",

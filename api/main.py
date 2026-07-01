@@ -4,10 +4,15 @@ import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
-from api.models import ChatRequest, ChatResponse, SessionInfo
-from api.chat import chat_with_kb
+from api.models import ChatRequest, ChatResponse, SessionInfo, ResearchRequest
+from api.chat import chat_with_kb, chat_with_kb_stream
+from api.research import run_research_stream
 from config import SESSIONS_DIR
+
+# Headers that keep SSE streams flowing promptly (disable caching/buffering)
+_SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -85,6 +90,40 @@ def chat(request: ChatRequest):
     )
 
     return ChatResponse(reply=reply, sources=sources)
+
+
+@app.post("/chat/stream")
+def chat_stream(request: ChatRequest):
+    """Streaming RAG chat — emits status steps, sources, then the answer token-by-token."""
+    path = os.path.join(SESSIONS_DIR, f"{request.session_id}_kb.json")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Session not found in knowledge base")
+
+    with open(path, encoding="utf-8") as f:
+        session_data = json.load(f)
+
+    topic = session_data.get("topic", "research topic")
+
+    return StreamingResponse(
+        chat_with_kb_stream(
+            session_id=request.session_id,
+            message=request.message,
+            history=[m.model_dump() for m in request.history],
+            topic=topic,
+        ),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
+
+
+@app.post("/research/stream")
+def research_stream(request: ResearchRequest):
+    """Run the full research pipeline for a new topic, streaming step-by-step progress."""
+    return StreamingResponse(
+        run_research_stream(topic=request.topic, max_papers=request.max_papers),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
 
 
 @app.get("/health")

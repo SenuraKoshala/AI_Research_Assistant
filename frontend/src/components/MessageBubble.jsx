@@ -18,6 +18,9 @@ export default function MessageBubble({ message }) {
       >
         <ReactMarkdown>{message.content}</ReactMarkdown>
 
+        {/* Blinking cursor while the answer is still streaming in */}
+        {message.streaming && <span style={styles.cursor}>▍</span>}
+
         {/* Show sources for assistant messages */}
         {!isUser && message.sources && message.sources.length > 0 && (
           <div style={styles.sources}>
@@ -86,5 +89,11 @@ const styles = {
   sourceText: {
     fontSize: "11px",
     color: "#888",
+  },
+  cursor: {
+    display: "inline-block",
+    marginLeft: "1px",
+    color: "#7c83ff",
+    animation: "blink 1s step-start infinite",
   },
 };
